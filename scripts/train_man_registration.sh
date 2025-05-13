@@ -1,0 +1,21 @@
+python /workspace/train/train_reg_v11.py \
+--runname T1_registration \
+--dataset man \
+--batch_size 1 \
+--epochs 100 \
+--lr 0.001 \
+--seed 1 \
+--gpu 0 \
+--npoints 10 \
+--voxel_size 0.3 \
+--ckpt_dir /workspace/ckpt/ \
+--use_fps \
+--use_weights \
+--alpha 2.0 \
+--data_list '' \
+--augment 0.0 \
+--root /workspace/data/truckscenes_mini/ \
+--pretrain_backbone_feats /workspace/ckpt/pretrained/nusc_feats.pth \
+--pretrain_model_feats /workspace/ckpt/Adaption2_ptv3/best_val_RRE.pth \
+--freeze_detector \
+--use_wandb

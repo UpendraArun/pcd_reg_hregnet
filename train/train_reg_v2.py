@@ -1,0 +1,323 @@
+# Training script
+# Model V1 (fully unsupervised version)
+# SVD head
+# Loss = Ch + MI
+
+
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+import torch
+from torch.utils.data import DataLoader
+import torch.optim as optim
+from torch.optim.lr_scheduler import StepLR
+
+#from data.kitti_data import KittiDataset
+#from data.nuscenes_data import NuscenesDataset
+
+from models import Model_V1
+from losses import transformation_loss
+from models.utils import set_seed
+
+from tqdm import tqdm
+import argparse
+import wandb
+
+#MAN Dataset
+from config import Config
+import dataset
+import sys
+import numpy as np
+
+# MI and Chamfer distance loss
+from losses import ChamferDistanceLoss
+from losses import GlobalinfolossNet, LocalinfolossNet, DeepMILoss
+# Dataloader
+from dataset.data_loader import load_dataset
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='HRegNet')
+
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--epochs', type=int, default=40)
+    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--seed', type=int, default=1)
+    parser.add_argument('--gpu', type=str, default='1')
+    parser.add_argument('--root', type=str, default='')
+    parser.add_argument('--npoints', type=int, default=16384)
+    parser.add_argument('--voxel_size', type=float, default=0.3)
+    parser.add_argument('--use_wandb', action='store_true')
+    parser.add_argument('--runname', type=str, default='')
+    parser.add_argument('--dataset', type=str, default='man')
+    parser.add_argument('--augment', type=float, default=0.0)
+    parser.add_argument('--ckpt_dir', type=str, default='')
+    parser.add_argument('--wandb_dir', type=str, default='')
+    parser.add_argument('--freeze_detector', action='store_true')
+    parser.add_argument('--freeze_feats', action='store_true')
+    parser.add_argument('--use_fps', action='store_true')
+    parser.add_argument('--data_list', type=str, default='')
+    parser.add_argument('--use_weights', action='store_true')
+    parser.add_argument('--pretrain_backbone_feats', type=str, default=None)
+    parser.add_argument('--pretrain_model_feats', type=str, default=None)
+    parser.add_argument('--alpha', type=float, default=1.0)
+    
+    return parser.parse_args()
+
+def val_reg(args, net, chamfer_loss, mi_loss):
+    # if args.dataset == 'kitti':
+    #     val_seqs = ['06','07']
+    #     #val_dataset = KittiDataset(args.root, val_seqs, args.npoints, args.voxel_size, args.data_list, 0.0)
+    # elif args.dataset == 'nuscenes':
+    #     val_seqs = ['val']
+    #     #val_dataset = NuscenesDataset(args.root, val_seqs, args.npoints, args.voxel_size, args.data_list, 0.0)
+    # elif args.dataset == 'man':
+    #     config = Config(dataset='man')
+    #     config.dataset_config.split = 'val'
+    #     loader = dataset.TruckScenesLoader()
+    #     man_data = dataset.TruckScenesDataset(loader(config, verbose=False), config)
+    #     val_dataset = dataset.TruckScenesPerturbation(dataset=man_data, config=config)
+    #     gt_Transformation = np.eye(4)
+    # elif args.dataset == 'audi':
+    #     config = Config(dataset='audi')
+    #     config.dataset_config.split = 'val'
+    #     audi_data = dataset.A2D2Dataset(config=config)
+    #     val_dataset = dataset.A2D2Perturbation(dataset=audi_data, config=config)
+    #     gt_Transformation = np.eye(4)
+
+    # else:  
+    #     raise('Not implemented')
+
+    config = Config(args)
+    val_dataset = load_dataset(config=config, split='val')
+
+    val_loader = DataLoader(val_dataset,
+                            batch_size=config.dataset_config.batch_size,
+                            num_workers=6,
+                            shuffle=False,
+                            pin_memory=True,
+                            drop_last=True)
+    
+    # Initialize Losses
+    #chamfer_loss = ChamferDistanceLoss(scale=50.0, reduction='mean')
+   # mi_loss = DeepMILoss()
+
+    alpha = config.dataset_config.loss_weights[0]
+    beta = config.dataset_config.loss_weights[1]
+
+    net.eval()
+    total_loss = 0
+    total_R_loss = 0
+    total_t_loss = 0
+    count = 0
+    pbar = tqdm(enumerate(val_loader))
+    with torch.no_grad():
+    
+        
+        for i, data in pbar: 
+            if args.dataset == 'man' or 'audi':
+                src_points = data['uncalibed_pcd']
+                dst_points = data['pcd_left']
+
+
+            src_points = src_points.cuda()
+            dst_points = dst_points.cuda()
+            #gt_R = gt_R.cuda()
+            #gt_t = gt_t.cuda()
+
+            ret_dict, corres_dict = net(src_points, dst_points)
+            
+            # # shuffle to get negative pairs
+            # corres_dict_xyz_3_shuffle = torch.zeros_like(corres_dict['src_xyz_corres_3'])
+            # for i in range(corres_dict_xyz_3_shuffle.shape[0]):
+            #     shuffle = torch.randperm(corres_dict_xyz_3_shuffle.shape[1])
+            #     corres_dict_xyz_3_shuffle[i] = corres_dict['src_xyz_corres_3'][i,shuffle]
+
+            # pos_pairs = torch.cat([ret_dict['src_feats']['xyz_3'], corres_dict['src_xyz_corres_3']], dim=-1) 
+            # neg_pairs = torch.cat([ret_dict['src_feats']['xyz_3'],corres_dict_xyz_3_shuffle], dim=-1)
+
+            #total_loss = JSEstimatorLoss(pos_pairs,neg_pairs)
+
+            loss = alpha*chamfer_loss(ret_dict['src_feats']['xyz_3'], ret_dict['dst_feats']['xyz_3']) \
+                    + beta*mi_loss(x_global        =corres_dict['src_dst_weights_3'],\
+                                    x_global_prime =ret_dict['src_dst_weights_3_prime'],\
+                                    x_local        =ret_dict['src_dst_feats_3'], \
+                                    x_local_prime  =ret_dict['src_dst_feats_3_prime'],\
+                                    c              =ret_dict['src_feats']['desc_3'],\
+                                    c_p            =ret_dict['src_feats']['sigmas_3'])
+
+
+            total_loss += loss.item()
+            count += 1
+
+    total_loss = total_loss/count
+
+    return total_loss
+
+
+def train_reg(args):
+
+    # if args.dataset == 'kitti':
+    #     train_seqs = ['00','01','02','03','04','05']
+    #     #train_dataset = KittiDataset(args.root, train_seqs, args.npoints, args.voxel_size, args.data_list, args.augment)
+    # elif args.dataset == 'nuscenes':
+    #     train_seqs = ['train']
+    #     #train_dataset = NuscenesDataset(args.root, train_seqs, args.npoints, args.voxel_size, args.data_list, args.augment)
+    
+    # elif args.dataset == 'man':
+    #     config = Config(dataset='man')
+    #     loader = dataset.TruckScenesLoader()
+    #     config.dataset_config.split = 'train'
+    #     #config.dataset_config.version = 'v1.0-test'
+    #     man_data = dataset.TruckScenesDataset(loader(config, verbose=True), config)
+    #     train_dataset = dataset.TruckScenesPerturbation(dataset=man_data, config=config)
+    #     gt_Transformation = np.eye(4)
+    
+    # elif args.dataset == 'audi':
+    #     config = Config(dataset='audi')
+    #     audi_data = dataset.A2D2Dataset(config=config)
+    #     train_dataset = dataset.A2D2Perturbation(dataset=audi_data, config=config)
+    #     gt_Transformation = np.eye(4)
+  
+    # else:  
+    #     raise('Not implemented')
+
+    config = Config(args)
+    train_dataset = load_dataset(config=config, split='train')
+    
+    train_loader = DataLoader(train_dataset,
+                              batch_size=config.dataset_config.batch_size,
+                              num_workers=6,
+                              shuffle=True,
+                              pin_memory=True,
+                              drop_last=True)
+    
+    # Initialize Model
+    net = Model_V1(args)
+    net.feature_extraction.load_state_dict(torch.load(args.pretrain_backbone_feats))
+    
+    # Initialize Losses
+    chamfer_loss = ChamferDistanceLoss(scale=50.0, reduction='mean')
+    mi_loss = DeepMILoss()
+
+    # Watch the network using wandb
+    if args.use_wandb:
+        wandb.watch(net)
+    
+    # Move model and losses to GPU
+    net.cuda()
+    chamfer_loss.cuda()
+    mi_loss.cuda()
+
+    optimizer = optim.Adam(net.parameters(), lr=args.lr)
+    scheduler = StepLR(optimizer, step_size=10, gamma=0.5)
+
+    best_train_loss = float('inf')
+    best_val_loss = float('inf')
+    alpha = config.dataset_config.loss_weights[0]
+    beta = config.dataset_config.loss_weights[1]
+
+
+    for epoch in tqdm(range(args.epochs)):
+        net.train()
+        count = 0
+        total_loss = 0
+        total_c_loss = 0
+        total_js_loss = 0
+
+        pbar = tqdm(enumerate(train_loader))
+
+        for i, data in pbar:
+            
+            if args.dataset == 'man' or 'audi':
+                src_points = data['uncalibed_pcd']
+                dst_points = data['pcd_left']
+
+                #gt_Transformation = data['igt']
+                #gt_Transformation = torch.inverse(gt_Transformation)
+
+                #gt_R = gt_Transformation[:,:3,:3].contiguous()
+                #gt_t = gt_Transformation[:,:3,3].contiguous()
+
+            src_points = src_points.cuda()
+            dst_points = dst_points.cuda()
+            #gt_R = gt_R.cuda()
+            #gt_t = gt_t.cuda()
+
+            optimizer.zero_grad()
+            ret_dict, corres_dict = net(src_points, dst_points)
+
+
+            c_loss = alpha*chamfer_loss(ret_dict['src_feats']['xyz_3'], ret_dict['dst_feats']['xyz_3'])
+            js_loss = beta*mi_loss(x_global        =corres_dict['src_dst_weights_3'],\
+                                    x_global_prime =ret_dict['src_dst_weights_3_prime'],\
+                                    x_local        =ret_dict['src_dst_feats_3'], \
+                                    x_local_prime  =ret_dict['src_dst_feats_3_prime'],\
+                                    c              =ret_dict['src_feats']['desc_3'],\
+                                    c_p            =ret_dict['src_feats']['sigmas_3'])
+
+            loss = c_loss + js_loss
+            
+
+            loss.backward()
+            optimizer.step()
+            
+            total_loss += loss.item()
+            total_c_loss += c_loss.item()
+            total_js_loss += js_loss.item()
+            count += 1
+
+
+            if i % 10 == 0:
+                pbar.set_description('Train Epoch:{}[{}/{}({:.0f}%)]\tLoss: {:.6f} \tchamfer_loss:{:.6f} \tmi_loss:{:.6f}'.format(
+                    epoch+1, i, len(train_loader), 100. * i/len(train_loader), loss.item(), c_loss.item(), js_loss.item()   
+                ))
+        
+        total_loss = total_loss/count
+        total_c_loss = total_c_loss/count
+        total_js_loss = total_js_loss/count
+        
+        torch.cuda.empty_cache()
+        total_val_loss = val_reg(args, net, chamfer_loss, mi_loss)
+        torch.cuda.empty_cache()
+
+        if args.use_wandb:
+            wandb.log({"train: total loss":total_loss,
+                       "train: chamfer loss":total_c_loss,
+                       "train: mi loss":total_js_loss,   
+                       "val loss": total_val_loss})
+                       #"val R": total_val_R, \
+                       #"val t":total_val_t})
+        
+        print('\n Epoch {} finished. Training loss: {:.4f} Valiadation loss: {:.4f}'.\
+            format(epoch+1, total_loss, total_val_loss))
+        
+        ckpt_dir = os.path.join(args.ckpt_dir, args.dataset + '_ckpt_'+args.runname)
+        if not os.path.exists(ckpt_dir):
+            os.makedirs(ckpt_dir)
+        
+        if total_loss < best_train_loss:
+            torch.save(net.state_dict(), os.path.join(ckpt_dir, 'best_train.pth'))
+            best_train_loss = total_loss
+            best_train_epoch = epoch + 1
+        
+        if total_val_loss < best_val_loss:
+            torch.save(net.state_dict(), os.path.join(ckpt_dir, 'best_val.pth'))
+            best_val_loss = total_val_loss
+            best_val_epoch = epoch + 1
+        
+        print('Best train epoch: {} Best train loss: {:.4f} Best val epoch: {} Best val loss: {:.4f}'.format(
+            best_train_epoch, best_train_loss, best_val_epoch, best_val_loss
+        ))
+
+        scheduler.step()
+
+if __name__ == '__main__':
+    args = parse_args()
+
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+    set_seed(args.seed)
+
+    if args.use_wandb:
+        wandb.init(config=args, project='HRegNet_phil01', name=args.dataset+'_'+args.runname, dir=args.wandb_dir)
+    train_reg(args)
