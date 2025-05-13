@@ -200,15 +200,15 @@ Initial decalibration of ±20°, ±0.50m on the source point cloud
 </table>
 
 
-<div align="center">
+<div>
 	<img src="https://github.com/UpendraArun/pcd_reg_hregnet/blob/main/assets/S1-1.png" width="33%" />
-	<p align="center"><em>Sample Scene</em></p>
+	<p><em>Sample Scene</em></p>
 </div>
 
 <div style="display: flex; justify-content: center;">
-	<img src="https://github.com/UpendraArun/pcd_reg_hregnet/blob/main/assets/S1-1.png" width="33%" />
-	<img src="https://github.com/UpendraArun/pcd_reg_hregnet/blob/main/assets/S1_initial_decalib.png" width="33%" />
-	<img src="https://github.com/UpendraArun/pcd_reg_hregnet/blob/main/assets/S1_A2_output.png" width="33%" />
+	<img src="https://github.com/UpendraArun/pcd_reg_hregnet/blob/main/assets/S1_ground_truth-1.png" width="20%" />
+	<img src="https://github.com/UpendraArun/pcd_reg_hregnet/blob/main/assets/S1_intial_decalib-1.png" width="20%" />
+	<img src="https://github.com/UpendraArun/pcd_reg_hregnet/blob/main/assets/S1_A2_output-1.png" width="20%" />
 </div>
 
 
