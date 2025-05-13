@@ -209,7 +209,7 @@ Initial decalibration of ±20°, ±0.50m on the source point cloud
 	<img src="https://github.com/UpendraArun/pcd_reg_hregnet/blob/main/assets/S1_ground_truth-1.png" width="20%" />
 	<img src="https://github.com/UpendraArun/pcd_reg_hregnet/blob/main/assets/S1_intial_decalib-1.png" width="20%" />
 	<img src="https://github.com/UpendraArun/pcd_reg_hregnet/blob/main/assets/S1_A2_output-1.png" width="20%" />
-	<p><em>Source and target point clouds from Bird's Eye View</em></p>
+	<p><em>Target(left) and source(right) point clouds of the above sample scene from Bird's Eye View</em></p>
 </div>
 
 
