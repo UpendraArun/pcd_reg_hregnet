@@ -9,7 +9,7 @@
 
 [5. Models](#models)
 
-[6. Add your custom model and dataset](#Add-your-custom-model-and-dataset)
+[6. Add Custom Model, Loss Function, and Dataset](#Add-Custom-Model,-Loss-Function,-and-Dataset)
 
 [7. Registration results](#Registration-results)
 
