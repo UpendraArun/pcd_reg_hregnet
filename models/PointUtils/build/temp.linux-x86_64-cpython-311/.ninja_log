@@ -1,0 +1,4 @@
+# ninja log v5
+0	9475	1741205619533478825	/workspace/models/PointUtils/build/temp.linux-x86_64-cpython-311/src/furthest_point_sampling.o	3b9614aa003b9be0
+0	17332	1741205627389488909	/workspace/models/PointUtils/build/temp.linux-x86_64-cpython-311/src/point_utils_api.o	e6c1f2a0e9ad3d8b
+0	30785	1741205640841506354	/workspace/models/PointUtils/build/temp.linux-x86_64-cpython-311/src/furthest_point_sampling_gpu.o	a386fd03573e6ee3

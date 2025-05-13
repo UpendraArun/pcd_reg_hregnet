@@ -1,0 +1,38 @@
+python /workspace/train_feats.py \
+--runname T3_Keypt_Detection \
+--batch_size 16 \
+--epochs 100 \
+--lr 0.001 \
+--seed 1 \
+--gpu 0 \
+--npoints 20000 \
+--dataset man \
+--voxel_size 0.3 \
+--ckpt_dir /workspace/ckpt/ \
+--use_fps \
+--use_weights \
+--data_list '' \
+--augment 0.0 \
+--root /workspace/data_truckscenes/ \
+--wandb_dir /workspace/logs_wandb \
+--use_wandb
+
+python /workspace/train_feats.py \
+--runname T3_Descriptor \
+--batch_size 8 \
+--epochs 100 \
+--lr 0.001 \
+--seed 1 \
+--gpu 0 \
+--npoints 20000 \
+--dataset man \
+--voxel_size 0.3 \
+--ckpt_dir /workspace/ckpt/ \
+--use_fps \
+--use_weights \
+--data_list '' \
+--augment 0.0 \
+--root /workspace/data_truckscenes/ \
+--pretrain_detector /workspace/ckpt/man_ckpt_T3_Keypt_Detection/best_val.pth \
+--train_desc \
+--use_wandb

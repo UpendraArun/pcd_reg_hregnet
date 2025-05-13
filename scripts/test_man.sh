@@ -1,0 +1,14 @@
+python /workspace/test/test_v3.py \
+--seed 1 \
+--batch_size 1 \
+--dataset man \
+--gpu 0 \
+--npoints 10000 \
+--dataset man \
+--voxel_size 0.3 \
+--use_fps \
+--use_weights \
+--data_list /workspace/data/ \
+--root /workspace/data_truckscenes/ \
+--pretrain_weights ckpt/Adaption1_Hregnet_mi/best_val.pth \
+--save_dir /workspace/results/Adaption1_Hregnet_mi_q/
